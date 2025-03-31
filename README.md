@@ -1,6 +1,6 @@
 # ast-grep MCP
 
-This is an experimental MCP implementation using ast-grep CLI.
+This is an experimental MCP implementation using [ast-grep](https://ast-grep.github.io/) CLI.
 
 
 ## Prerequisite
