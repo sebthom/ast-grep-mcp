@@ -19,7 +19,7 @@ def find_code(
 
 def run_ast_grep_command(pattern: str, project_folder: str, language: Optional[str]) -> List[dict[str, Any]]:
     try:
-        args = ["ast-grep", "--pattern", pattern, project_folder]
+        args = ["ast-grep", "--pattern", pattern, "--json", project_folder]
         if language:
             args.extend(["--lang", language])
         # Run command and capture output
