@@ -3,9 +3,31 @@ from mcp.server.fastmcp import FastMCP
 import subprocess
 from pydantic import Field
 import json
+from enum import Enum
 
 # Initialize FastMCP server
 mcp = FastMCP("ast-grep")
+
+class DumpFormat(Enum):
+    Pattern = "pattern"
+    CST = "cst"
+    AST = "ast"
+
+@mcp.tool()
+def dump_syntax_tree(
+    code: str = Field(description = "The code you need"),
+    language: str = Field(description = "The language of the code"),
+    format: DumpFormat = Field(description = "Code dump format. Available values: pattern, ast, cst", default = "cst"),
+) -> str:
+    """
+    Dump code's syntax structure or dump a query's pattern structure.
+    This is useful to discover correct syntax kind and syntax tree structure. Call it when debugging a rule.
+    The tool requires three argument: code, language and format. The first two are self-explanatory.
+    `format` is the output format of the syntax tree.
+    use `format=cst` to inspect the code's concrete syntax tree structure, useful to debug target code.
+    use `format=pattern` to inspect how ast-grep interprets a pattern, useful to debug pattern rule.
+    """
+    return run_ast_grep_dump(code, language, format.value)
 
 @mcp.tool()
 def find_code(
@@ -31,6 +53,21 @@ def find_code_by_rule(
     It is a more advanced search tool than the simple `find_code`.
     """
     return run_ast_grep_yaml(yaml, project_folder)
+
+def run_ast_grep_dump(code: str, language: str, format: str) -> str:
+    args = ["ast-grep", "--pattern", code, "--lang", language, f"--debug-query={format}"]
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            check=True  # Raises CalledProcessError if return code is non-zero
+        )
+        return result.stderr.strip()  # Return the output of the command
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print("Error output:", e.stderr)
+        return e.stderr.strip()
 
 def run_ast_grep_command(pattern: str, project_folder: str, language: Optional[str]) -> List[dict[str, Any]]:
     try:
