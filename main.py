@@ -29,9 +29,36 @@ def dump_syntax_tree(
     """
     return run_ast_grep_dump(code, language, format.value)
 
+
+@mcp.tool()
+def test_match_code_rule(
+    code: str = Field(description="The code to test against the rule"),
+    yaml: str = Field(description="The ast-grep YAML rule to search. It must have id, language, rule fields."),
+) -> List[dict[str, Any]]:
+    """
+    Test a code against an ast-grep YAML rule.
+    This is useful to test a rule before using it in a project.
+    """
+    args = ["ast-grep", "scan","--inline-rules", yaml, "--json", "--stdin"]
+    try:
+        # Run command and capture output
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            input=code,
+            text=True,
+            check=True  # Raises CalledProcessError if return code is non-zero
+        )
+        matches = json.loads(result.stdout.strip())
+        if not matches:
+            raise ValueError("No matches found for the given code and rule. Try adding `stopBy: end` to your inside/has rule.")
+        return matches
+    except subprocess.CalledProcessError as e:
+        return e.stderr
+
 @mcp.tool()
 def find_code(
-    project_folder: str = Field(description="The path to the project folder"),
+    project_folder: str = Field(description="The absolute path to the project folder. It must be absolute path."),
     pattern: str = Field(description="The ast-grep pattern to search for. Note the pattern must has valid AST structure."),
     language: str = Field(description="The language of the query", default=""),
 ) -> List[dict[str, Any]]:
