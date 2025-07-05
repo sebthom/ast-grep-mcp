@@ -136,7 +136,7 @@ def run_ast_grep_yaml(yaml: str, project_folder: str) -> List[dict[str, Any]]:
         print("Command not found")
         return []
 
-def run_mcp_server():
+def run_mcp_server() -> None:
     """
     Run the MCP server.
     This function is used to start the MCP server when this script is run directly.
