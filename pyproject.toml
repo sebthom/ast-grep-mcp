@@ -10,4 +10,4 @@ dependencies = [
 ]
 
 [project.scripts]
-ast-grep-server = "main:mcp.run"
+ast-grep-server = "main:run_mcp_server"
