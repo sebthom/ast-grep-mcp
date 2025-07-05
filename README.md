@@ -45,6 +45,17 @@ This MCP server enables AI assistants (like Cursor, Claude Desktop, etc.) to sea
    ```bash
    ast-grep --version
    ```
+
+## Running with `uvx`
+
+You can run the server directly from GitHub using `uvx`:
+
+```bash
+uvx --from git+https://github.com/ast-grep/ast-grep-mcp ast-grep-server
+```
+
+This is useful for quickly trying out the server without cloning the repository.
+
 ## Configuration
 
 ### For Cursor

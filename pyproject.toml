@@ -8,3 +8,6 @@ dependencies = [
     "pydantic>=2.11.0",
     "mcp[cli]>=1.6.0",
 ]
+
+[project.scripts]
+ast-grep-server = "main:mcp.run"
