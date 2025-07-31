@@ -1,5 +1,3 @@
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/ast-grep-ast-grep-mcp-badge.png)](https://mseep.ai/app/ast-grep-ast-grep-mcp)
-
 # ast-grep MCP Server
 
 An experimental [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that provides AI assistants with powerful structural code search capabilities using [ast-grep](https://ast-grep.github.io/).
@@ -193,3 +191,5 @@ This is an experimental project. Issues and pull requests are welcome!
 - [ast-grep](https://ast-grep.github.io/) - The core structural search tool
 - [Model Context Protocol](https://modelcontextprotocol.io/) - The protocol this server implements
 - [FastMCP](https://github.com/pydantic/fastmcp) - The Python MCP framework used
+
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/ast-grep-ast-grep-mcp-badge.png)](https://mseep.ai/app/ast-grep-ast-grep-mcp)
