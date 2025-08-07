@@ -22,7 +22,7 @@ def dump_syntax_tree(
     """
     Dump code's syntax structure or dump a query's pattern structure.
     This is useful to discover correct syntax kind and syntax tree structure. Call it when debugging a rule.
-    The tool requires three argument: code, language and format. The first two are self-explanatory.
+    The tool requires three arguments: code, language and format. The first two are self-explanatory.
     `format` is the output format of the syntax tree.
     use `format=cst` to inspect the code's concrete syntax tree structure, useful to debug target code.
     use `format=pattern` to inspect how ast-grep interprets a pattern, useful to debug pattern rule.
@@ -59,7 +59,7 @@ def test_match_code_rule(
 @mcp.tool()
 def find_code(
     project_folder: str = Field(description="The absolute path to the project folder. It must be absolute path."),
-    pattern: str = Field(description="The ast-grep pattern to search for. Note the pattern must has valid AST structure."),
+    pattern: str = Field(description="The ast-grep pattern to search for. Note, the pattern must have valid AST structure."),
     language: str = Field(description="The language of the query", default=""),
 ) -> List[dict[str, Any]]:
     """
@@ -71,13 +71,15 @@ def find_code(
 
 @mcp.tool()
 def find_code_by_rule(
-    project_folder: str = Field(description="The path to the project folder"),
+    project_folder: str = Field(description="The absolute path to the project folder. It must be absolute path."),
     yaml: str = Field(description="The ast-grep YAML rule to search. It must have id, language, rule fields."),
     ) -> List[dict[str, Any]]:
     """
     Find code using ast-grep's YAML rule in a project folder.
     YAML rule is more powerful than simple pattern and can perform complex search like find AST inside/having another AST.
     It is a more advanced search tool than the simple `find_code`.
+
+    Tip: When using relational rules (inside/has), add `stopBy: end` to ensure complete traversal.
     """
     return run_ast_grep_yaml(yaml, project_folder)
 
