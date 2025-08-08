@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, TypedDict
 from mcp.server.fastmcp import FastMCP
 import subprocess
 from pydantic import Field
@@ -53,6 +53,70 @@ elif os.environ.get('AST_GREP_CONFIG'):
 
 # Initialize FastMCP server
 mcp = FastMCP("ast-grep")
+
+# Type definitions for search results
+class SearchMetadata(TypedDict):
+    total_matches: int
+    offset: int
+    limit: Optional[int]
+    returned: int
+    has_more: bool
+
+class SearchResult(TypedDict):
+    results: List[dict[str, Any]]  # List of ast-grep match objects
+    metadata: SearchMetadata
+
+# Global cache - stores only the last search as (key, results) tuple
+_last_search: Optional[tuple[tuple, List[dict[str, Any]]]] = None
+
+def get_paginated_results(
+    key: tuple,
+    offset: int,
+    limit: Optional[int],
+    execute_search
+) -> SearchResult:
+    """Helper function to handle caching and pagination logic.
+
+    Args:
+        key: Tuple identifying the search (used for cache comparison)
+        offset: Number of results to skip
+        limit: Maximum number of results to return
+        execute_search: Callable that executes the actual search and returns results
+
+    Returns:
+        SearchResult with paginated results and metadata
+    """
+    global _last_search
+
+    # If offset is 0, always perform fresh search
+    if offset == 0:
+        results = execute_search()
+        _last_search = (key, results)
+    else:
+        # Try to use cached results for pagination
+        if _last_search and _last_search[0] == key:
+            results = _last_search[1]
+        else:
+            # Cache miss - need to re-execute
+            results = execute_search()
+            _last_search = (key, results)
+
+    # Apply offset and limit
+    total_matches = len(results)
+    end_idx = offset + limit if limit is not None else None
+    sliced_results = results[offset:end_idx]
+
+    return {
+        "results": sliced_results,
+        "metadata": {
+            "total_matches": total_matches,
+            "offset": offset,
+            "limit": limit,
+            "returned": len(sliced_results),
+            "has_more": (offset + len(sliced_results)) < total_matches
+        }
+    }
+
 
 class DumpFormat(Enum):
     Pattern = "pattern"
@@ -152,26 +216,53 @@ def find_code(
     project_folder: str = Field(description="The absolute path to the project folder. It must be absolute path."),
     pattern: str = Field(description="The ast-grep pattern to search for. Note, the pattern must have valid AST structure."),
     language: str = Field(description="The language of the query", default=""),
-) -> List[dict[str, Any]]:
+    offset: int = Field(description="Number of results to skip. Use 0 for fresh search, >0 for pagination.", default=0),
+    limit: Optional[int] = Field(description="Maximum number of results to return. None returns all remaining results.", default=None),
+) -> SearchResult:
     """
     Find code in a project folder that matches the given ast-grep pattern.
     Pattern is good for simple and single-AST node result.
     For more complex usage, please use YAML by `find_code_by_rule`.
 
     Uses: ast-grep run --pattern <pattern> --json <project_folder>
+
+    IMPORTANT: This tool returns detailed match data that can consume significant tokens.
+    Use pagination to avoid hitting token limits:
+    - limit: Maximum results to return (recommended: 50-100 depending on pattern complexity)
+    - offset: Number of results to skip for pagination (default: 0)
+
+    Without limit, ALL matches are returned which may exceed token limits in large codebases.
+
+    Returns a dictionary with:
+    - results: List of matches (limited by offset/limit parameters)
+    - metadata: Information about the search including:
+      - total_matches: Total number across all pages
+      - has_more: Boolean indicating if more results exist
+      - offset/limit: Current pagination state
+
+    Example usage for token-efficient searching:
+      Initial search: find_code(pattern="class $NAME", limit=10)
+      If metadata.has_more is true and you need more results:
+      Next page: find_code(pattern="class $NAME", limit=10, offset=10)
     """
     args = ["--pattern", pattern, "--json"]
     if language:
         args.extend(["--lang", language])
     args.append(project_folder)
-    result = run_ast_grep("run", args)
-    return json.loads(result.stdout)
+    return get_paginated_results(
+        key = (pattern, project_folder, language),
+        offset = offset,
+        limit = limit,
+        execute_search = lambda: json.loads(run_ast_grep("run", args).stdout.strip() or "[]")
+    )
 
 @mcp.tool()
 def find_code_by_rule(
     project_folder: str = Field(description="The absolute path to the project folder. It must be absolute path."),
     yaml: str = Field(description="The ast-grep YAML rule to search. It must have id, language, rule fields."),
-    ) -> List[dict[str, Any]]:
+    offset: int = Field(description="Number of results to skip. Use 0 for fresh search, >0 for pagination.", default=0),
+    limit: Optional[int] = Field(description="Maximum number of results to return. None returns all remaining results.", default=None),
+    ) -> SearchResult:
     """
     Find code using ast-grep's YAML rule in a project folder.
     YAML rule is more powerful than simple pattern and can perform complex search like find AST inside/having another AST.
@@ -180,10 +271,33 @@ def find_code_by_rule(
     Tip: When using relational rules (inside/has), add `stopBy: end` to ensure complete traversal.
 
     Uses: ast-grep scan --inline-rules <yaml> --json <project_folder>
+
+    IMPORTANT: This tool returns detailed match data that can consume significant tokens.
+    Use pagination to avoid hitting token limits:
+    - limit: Maximum results to return (recommended: 50-100 depending on pattern complexity)
+    - offset: Number of results to skip for pagination (default: 0)
+
+    Without limit, ALL matches are returned which may exceed token limits in large codebases.
+
+    Returns a dictionary with:
+    - results: List of matches (limited by offset/limit parameters)
+    - metadata: Information about the search including:
+      - total_matches: Total number across all pages
+      - has_more: Boolean indicating if more results exist
+      - offset/limit: Current pagination state
+
+    Example usage for token-efficient searching:
+      Initial search: find_code_by_rule(yaml="id: x\\nlanguage: python\\nrule: {pattern: 'class $NAME'}", limit=10)
+      If metadata.has_more is true and you need more results:
+      Next page: find_code_by_rule(yaml="id: x\\nlanguage: python\\nrule: {pattern: 'class $NAME'}", limit=10, offset=10)
     """
     args = ["--inline-rules", yaml, "--json", project_folder]
-    result = run_ast_grep("scan", args)
-    return json.loads(result.stdout)
+    return get_paginated_results(
+        key = (yaml, project_folder),
+        offset = offset,
+        limit = limit,
+        execute_search = lambda: json.loads(run_ast_grep("scan", args).stdout.strip() or "[]")
+    )
 
 def run_command(args: List[str], input_text: Optional[str] = None) -> subprocess.CompletedProcess:
     try:
