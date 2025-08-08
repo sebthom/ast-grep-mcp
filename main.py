@@ -4,6 +4,51 @@ import subprocess
 from pydantic import Field
 import json
 from enum import Enum
+import argparse
+import os
+import sys
+
+# Determine how the script was invoked
+if sys.argv[0].endswith('main.py'):
+    # Direct execution: python main.py
+    prog = 'python main.py'
+else:
+    # Installed script execution (via uvx, pip install, etc.)
+    prog = None  # Let argparse use the default
+
+# Parse command-line arguments
+parser = argparse.ArgumentParser(
+    prog=prog,
+    description='ast-grep MCP Server - Provides structural code search capabilities via Model Context Protocol',
+    epilog='''
+environment variables:
+  AST_GREP_CONFIG    Path to sgconfig.yaml file (overridden by --config flag)
+
+For more information, see: https://github.com/ast-grep/ast-grep-mcp
+    ''',
+    formatter_class=argparse.RawDescriptionHelpFormatter
+)
+parser.add_argument(
+    '--config',
+    type=str,
+    metavar='PATH',
+    help='Path to sgconfig.yaml file for customizing ast-grep behavior (language mappings, rule directories, etc.)'
+)
+args = parser.parse_args()
+
+# Determine config path with precedence: --config flag > AST_GREP_CONFIG env > None
+CONFIG_PATH = None
+if args.config:
+    if not os.path.exists(args.config):
+        print(f"Error: Config file '{args.config}' does not exist")
+        sys.exit(1)
+    CONFIG_PATH = args.config
+elif os.environ.get('AST_GREP_CONFIG'):
+    env_config = os.environ.get('AST_GREP_CONFIG')
+    if not os.path.exists(env_config):
+        print(f"Error: Config file '{env_config}' specified in AST_GREP_CONFIG does not exist")
+        sys.exit(1)
+    CONFIG_PATH = env_config
 
 # Initialize FastMCP server
 mcp = FastMCP("ast-grep")
@@ -40,6 +85,8 @@ def test_match_code_rule(
     This is useful to test a rule before using it in a project.
     """
     args = ["ast-grep", "scan","--inline-rules", yaml, "--json", "--stdin"]
+    if CONFIG_PATH:
+        args.extend(["--config", CONFIG_PATH])
     try:
         # Run command and capture output
         result = subprocess.run(
@@ -84,7 +131,9 @@ def find_code_by_rule(
     return run_ast_grep_yaml(yaml, project_folder)
 
 def run_ast_grep_dump(code: str, language: str, format: str) -> str:
-    args = ["ast-grep", "--pattern", code, "--lang", language, f"--debug-query={format}"]
+    args = ["ast-grep", "run", "--pattern", code, "--lang", language, f"--debug-query={format}"]
+    if CONFIG_PATH:
+        args.extend(["--config", CONFIG_PATH])
     try:
         result = subprocess.run(
             args,
@@ -100,9 +149,12 @@ def run_ast_grep_dump(code: str, language: str, format: str) -> str:
 
 def run_ast_grep_command(pattern: str, project_folder: str, language: Optional[str]) -> List[dict[str, Any]]:
     try:
-        args = ["ast-grep", "--pattern", pattern, "--json", project_folder]
+        args = ["ast-grep", "run", "--pattern", pattern, "--json"]
+        if CONFIG_PATH:
+            args.extend(["--config", CONFIG_PATH])
         if language:
             args.extend(["--lang", language])
+        args.append(project_folder)
         # Run command and capture output
         result = subprocess.run(
             args,
@@ -121,7 +173,10 @@ def run_ast_grep_command(pattern: str, project_folder: str, language: Optional[s
 
 def run_ast_grep_yaml(yaml: str, project_folder: str) -> List[dict[str, Any]]:
     try:
-        args = ["ast-grep", "scan","--inline-rules", yaml, "--json", project_folder]
+        args = ["ast-grep", "scan", "--inline-rules", yaml, "--json"]
+        if CONFIG_PATH:
+            args.extend(["--config", CONFIG_PATH])
+        args.append(project_folder)
         # Run command and capture output
         result = subprocess.run(
             args,

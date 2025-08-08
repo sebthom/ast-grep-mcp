@@ -90,6 +90,16 @@ Add to your Claude Desktop MCP configuration:
 }
 ```
 
+### Custom ast-grep Configuration
+
+The MCP server supports using a custom `sgconfig.yaml` file to configure ast-grep behavior.
+See the [ast-grep configuration documentation](https://ast-grep.github.io/guide/project/project-config.html) for details on the config file format.
+
+You can provide the config file in two ways (in order of precedence):
+
+1. **Command-line argument**: `--config /path/to/sgconfig.yaml`
+2. **Environment variable**: `AST_GREP_CONFIG=/path/to/sgconfig.yaml`
+
 ## Usage
 
 This repository includes comprehensive ast-grep rule documentation in [ast-grep.mdc](https://github.com/ast-grep/ast-grep-mcp/blob/main/ast-grep.mdc). The documentation covers all aspects of writing effective ast-grep rules, from simple patterns to complex multi-condition searches.
