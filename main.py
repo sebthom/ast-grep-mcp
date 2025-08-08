@@ -71,6 +71,8 @@ def dump_syntax_tree(
     `format` is the output format of the syntax tree.
     use `format=cst` to inspect the code's concrete syntax tree structure, useful to debug target code.
     use `format=pattern` to inspect how ast-grep interprets a pattern, useful to debug pattern rule.
+
+    Uses: ast-grep run --pattern <code> --lang <language> --debug-query=<format>
     """
     result = run_ast_grep("run", ["--pattern", code, "--lang", language, f"--debug-query={format.value}"])
     return result.stderr.strip()
@@ -83,6 +85,8 @@ def test_match_code_rule(
     """
     Test a code against an ast-grep YAML rule.
     This is useful to test a rule before using it in a project.
+
+    Uses: ast-grep scan --inline-rules <yaml> --json --stdin
     """
     result = run_ast_grep("scan", ["--inline-rules", yaml, "--json", "--stdin"], input_text = code)
     matches = json.loads(result.stdout.strip())
@@ -100,6 +104,8 @@ def find_code(
     Find code in a project folder that matches the given ast-grep pattern.
     Pattern is good for simple and single-AST node result.
     For more complex usage, please use YAML by `find_code_by_rule`.
+
+    Uses: ast-grep run --pattern <pattern> --json <project_folder>
     """
     args = ["--pattern", pattern, "--json"]
     if language:
@@ -119,6 +125,8 @@ def find_code_by_rule(
     It is a more advanced search tool than the simple `find_code`.
 
     Tip: When using relational rules (inside/has), add `stopBy: end` to ensure complete traversal.
+
+    Uses: ast-grep scan --inline-rules <yaml> --json <project_folder>
     """
     args = ["--inline-rules", yaml, "--json", project_folder]
     result = run_ast_grep("scan", args)
