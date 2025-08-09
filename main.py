@@ -74,8 +74,8 @@ def dump_syntax_tree(
 
     Internally calls: ast-grep run --pattern <code> --lang <language> --debug-query=<format>
     """
-    return run_ast_grep_dump(code, language, format.value)
-
+    result = run_ast_grep("run", ["--pattern", code, "--lang", language, f"--debug-query={format.value}"])
+    return result.stderr.strip()
 
 @mcp.tool()
 def test_match_code_rule(
@@ -88,24 +88,11 @@ def test_match_code_rule(
 
     Internally calls: ast-grep scan --inline-rules <yaml> --json --stdin
     """
-    args = ["ast-grep", "scan","--inline-rules", yaml, "--json", "--stdin"]
-    if CONFIG_PATH:
-        args.extend(["--config", CONFIG_PATH])
-    try:
-        # Run command and capture output
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            input=code,
-            text=True,
-            check=True  # Raises CalledProcessError if return code is non-zero
-        )
-        matches = json.loads(result.stdout.strip())
-        if not matches:
-            raise ValueError("No matches found for the given code and rule. Try adding `stopBy: end` to your inside/has rule.")
-        return matches
-    except subprocess.CalledProcessError as e:
-        return e.stderr
+    result = run_ast_grep("scan", ["--inline-rules", yaml, "--json", "--stdin"], input_text = code)
+    matches = json.loads(result.stdout.strip())
+    if not matches:
+        raise ValueError("No matches found for the given code and rule. Try adding `stopBy: end` to your inside/has rule.")
+    return matches
 
 @mcp.tool()
 def find_code(
@@ -120,7 +107,12 @@ def find_code(
 
     Internally calls: ast-grep run --pattern <pattern> --json <project_folder>
     """
-    return run_ast_grep_command(pattern, project_folder, language)
+    args = ["--pattern", pattern, "--json"]
+    if language:
+        args.extend(["--lang", language])
+    args.append(project_folder)
+    result = run_ast_grep("run", args)
+    return json.loads(result.stdout)
 
 @mcp.tool()
 def find_code_by_rule(
@@ -136,70 +128,32 @@ def find_code_by_rule(
     
     Internally calls: ast-grep scan --inline-rules <yaml> --json <project_folder>
     """
-    return run_ast_grep_yaml(yaml, project_folder)
+    args = ["--inline-rules", yaml, "--json", project_folder]
+    result = run_ast_grep("scan", args)
+    return json.loads(result.stdout)
 
-def run_ast_grep_dump(code: str, language: str, format: str) -> str:
-    args = ["ast-grep", "run", "--pattern", code, "--lang", language, f"--debug-query={format}"]
+def run_command(args: List[str], input_text: Optional[str] = None) -> subprocess.CompletedProcess:
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            input=input_text,
+            text=True,
+            check=True  # Raises CalledProcessError if return code is non-zero
+        )
+        return result
+    except subprocess.CalledProcessError as e:
+        stderr_msg = e.stderr.strip() if e.stderr else "(no error output)"
+        error_msg = f"Command {e.cmd} failed with exit code {e.returncode}: {stderr_msg}"
+        raise RuntimeError(error_msg) from e
+    except FileNotFoundError as e:
+        error_msg = f"Command '{args[0]}' not found. Please ensure {args[0]} is installed and in PATH."
+        raise RuntimeError(error_msg) from e
+
+def run_ast_grep(command:str, args: List[str], input_text: Optional[str] = None) -> subprocess.CompletedProcess:
     if CONFIG_PATH:
-        args.extend(["--config", CONFIG_PATH])
-    try:
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            check=True  # Raises CalledProcessError if return code is non-zero
-        )
-        return result.stderr.strip()  # Return the output of the command
-    except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print("Error output:", e.stderr)
-        return e.stderr.strip()
-
-def run_ast_grep_command(pattern: str, project_folder: str, language: Optional[str]) -> List[dict[str, Any]]:
-    try:
-        args = ["ast-grep", "run", "--pattern", pattern, "--json"]
-        if CONFIG_PATH:
-            args.extend(["--config", CONFIG_PATH])
-        if language:
-            args.extend(["--lang", language])
-        args.append(project_folder)
-        # Run command and capture output
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            check=True  # Raises CalledProcessError if return code is non-zero
-        )
-        return json.loads(result.stdout)
-    except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print("Error output:", e.stderr)
-        return e.stderr
-    except FileNotFoundError:
-        print("Command not found")
-        return []
-
-def run_ast_grep_yaml(yaml: str, project_folder: str) -> List[dict[str, Any]]:
-    try:
-        args = ["ast-grep", "scan", "--inline-rules", yaml, "--json"]
-        if CONFIG_PATH:
-            args.extend(["--config", CONFIG_PATH])
-        args.append(project_folder)
-        # Run command and capture output
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            check=True  # Raises CalledProcessError if return code is non-zero
-        )
-        return json.loads(result.stdout)
-    except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print("Error output:", e.stderr)
-        return e.stderr
-    except FileNotFoundError:
-        print("Command not found")
-        return []
+        args = ["--config", CONFIG_PATH] + args
+    return run_command(["ast-grep", command] + args, input_text)
 
 def run_mcp_server() -> None:
     """
