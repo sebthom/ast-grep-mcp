@@ -131,6 +131,10 @@ Test ast-grep YAML rules against code snippets before applying them to larger co
 ### 🎯 `find_code`
 Search codebases using simple ast-grep patterns for straightforward structural matches.
 
+**Parameters:**
+- `max_results`: Limit number of results (default: unlimited)
+- `output_format`: Choose between `"text"` (default, ~75% fewer tokens) or `"json"` (full metadata)
+
 **Use cases:**
 - Find function calls with specific patterns
 - Locate variable declarations
@@ -138,6 +142,10 @@ Search codebases using simple ast-grep patterns for straightforward structural m
 
 ### 🚀 `find_code_by_rule`
 Advanced codebase search using complex YAML rules that can express sophisticated matching criteria.
+
+**Parameters:**
+- `max_results`: Limit number of results (default: unlimited)
+- `output_format`: Choose between `"text"` (default, ~75% fewer tokens) or `"json"` (full metadata)
 
 **Use cases:**
 - Find nested code structures

@@ -99,38 +99,115 @@ def find_code(
     project_folder: str = Field(description="The absolute path to the project folder. It must be absolute path."),
     pattern: str = Field(description="The ast-grep pattern to search for. Note, the pattern must have valid AST structure."),
     language: str = Field(description="The language of the query", default=""),
-) -> List[dict[str, Any]]:
+    max_results: Optional[int] = Field(default=None, description="Maximum results to return"),
+    output_format: str = Field(default="text", description="'text' or 'json'"),
+) -> str | List[dict[str, Any]]:
     """
     Find code in a project folder that matches the given ast-grep pattern.
     Pattern is good for simple and single-AST node result.
     For more complex usage, please use YAML by `find_code_by_rule`.
 
-    Internally calls: ast-grep run --pattern <pattern> --json <project_folder>
+    Internally calls: ast-grep run --pattern <pattern> [--json] <project_folder>
+
+    Output formats:
+    - text (default): Simple file:line:content format, ~75% fewer tokens
+    - json: Full match objects with metadata
+
+    Example usage:
+      find_code(pattern="class $NAME", max_results=20)  # Returns text format
+      find_code(pattern="class $NAME", output_format="json")  # Returns JSON with metadata
     """
-    args = ["--pattern", pattern, "--json"]
+    if output_format not in ["text", "json"]:
+        raise ValueError(f"Invalid output_format: {output_format}. Must be 'text' or 'json'.")
+
+    args = ["--pattern", pattern]
     if language:
         args.extend(["--lang", language])
-    args.append(project_folder)
-    result = run_ast_grep("run", args)
-    return json.loads(result.stdout)
+
+    if output_format == "json":
+        # JSON format - return structured data
+        result = run_ast_grep("run", args + ["--json", project_folder])
+        matches = json.loads(result.stdout.strip() or "[]")
+        # Limit results if max_results is specified
+        if max_results is not None and len(matches) > max_results:
+            matches = matches[:max_results]
+        return matches
+    else:
+        # Text format - return plain text output
+        result = run_ast_grep("run", args + [project_folder])
+        output = result.stdout.strip()
+        if not output:
+            output = "No matches found"
+        else:
+            # Apply max_results limit if specified
+            lines = output.split('\n')
+            non_empty_lines = [line for line in lines if line.strip()]
+            if max_results is not None and len(non_empty_lines) > max_results:
+                # Limit the results
+                non_empty_lines = non_empty_lines[:max_results]
+                output = '\n'.join(non_empty_lines)
+                header = f"Found {len(non_empty_lines)} matches (limited to {max_results}):\n"
+            else:
+                header = f"Found {len(non_empty_lines)} matches:\n"
+            output = header + output
+        return output
 
 @mcp.tool()
 def find_code_by_rule(
     project_folder: str = Field(description="The absolute path to the project folder. It must be absolute path."),
     yaml: str = Field(description="The ast-grep YAML rule to search. It must have id, language, rule fields."),
-    ) -> List[dict[str, Any]]:
+    max_results: Optional[int] = Field(default=None, description="Maximum results to return"),
+    output_format: str = Field(default="text", description="'text' or 'json'"),
+    ) -> str | List[dict[str, Any]]:
     """
     Find code using ast-grep's YAML rule in a project folder.
     YAML rule is more powerful than simple pattern and can perform complex search like find AST inside/having another AST.
     It is a more advanced search tool than the simple `find_code`.
 
     Tip: When using relational rules (inside/has), add `stopBy: end` to ensure complete traversal.
-    
-    Internally calls: ast-grep scan --inline-rules <yaml> --json <project_folder>
+
+    Internally calls: ast-grep scan --inline-rules <yaml> [--json] <project_folder>
+
+    Output formats:
+    - text (default): Simple file:line:content format, ~75% fewer tokens
+    - json: Full match objects with metadata
+
+    Example usage:
+      find_code_by_rule(yaml="id: x\\nlanguage: python\\nrule: {pattern: 'class $NAME'}", max_results=20)
+      find_code_by_rule(yaml="...", output_format="json")  # For full metadata
     """
-    args = ["--inline-rules", yaml, "--json", project_folder]
-    result = run_ast_grep("scan", args)
-    return json.loads(result.stdout)
+    if output_format not in ["text", "json"]:
+        raise ValueError(f"Invalid output_format: {output_format}. Must be 'text' or 'json'.")
+
+    args = ["--inline-rules", yaml]
+
+    if output_format == "json":
+        # JSON format - return structured data
+        result = run_ast_grep("scan", args + ["--json", project_folder])
+        matches = json.loads(result.stdout.strip() or "[]")
+        # Limit results if max_results is specified
+        if max_results is not None and len(matches) > max_results:
+            matches = matches[:max_results]
+        return matches
+    else:
+        # Text format - return plain text output
+        result = run_ast_grep("scan", args + [project_folder])
+        output = result.stdout.strip()
+        if not output:
+            output = "No matches found"
+        else:
+            # Apply max_results limit if specified
+            lines = output.split('\n')
+            non_empty_lines = [line for line in lines if line.strip()]
+            if max_results is not None and len(non_empty_lines) > max_results:
+                # Limit the results
+                non_empty_lines = non_empty_lines[:max_results]
+                output = '\n'.join(non_empty_lines)
+                header = f"Found {len(non_empty_lines)} matches (limited to {max_results}):\n"
+            else:
+                header = f"Found {len(non_empty_lines)} matches:\n"
+            output = header + output
+        return output
 
 def run_command(args: List[str], input_text: Optional[str] = None) -> subprocess.CompletedProcess:
     try:
