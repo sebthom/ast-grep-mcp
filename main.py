@@ -1,62 +1,63 @@
-from typing import Any, List, Optional
-from mcp.server.fastmcp import FastMCP
-import subprocess
-from pydantic import Field
-import json
-from enum import Enum
 import argparse
+import json
 import os
+import subprocess
 import sys
+from typing import Any, List, Literal, Optional
 
-# Determine how the script was invoked
-if sys.argv[0].endswith('main.py'):
-    # Direct execution: python main.py
-    prog = 'python main.py'
-else:
-    # Installed script execution (via uvx, pip install, etc.)
-    prog = None  # Let argparse use the default
+from mcp.server.fastmcp import FastMCP
+from pydantic import Field
 
-# Parse command-line arguments
-parser = argparse.ArgumentParser(
-    prog=prog,
-    description='ast-grep MCP Server - Provides structural code search capabilities via Model Context Protocol',
-    epilog='''
+# Global variable for config path (will be set by parse_args_and_get_config)
+CONFIG_PATH = None
+
+def parse_args_and_get_config():
+    """Parse command-line arguments and determine config path."""
+    global CONFIG_PATH
+
+    # Determine how the script was invoked
+    prog = None
+    if sys.argv[0].endswith('main.py'):
+        # Direct execution: python main.py
+        prog = 'python main.py'
+
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        description='ast-grep MCP Server - Provides structural code search capabilities via Model Context Protocol',
+        epilog='''
 environment variables:
   AST_GREP_CONFIG    Path to sgconfig.yaml file (overridden by --config flag)
 
 For more information, see: https://github.com/ast-grep/ast-grep-mcp
-    ''',
-    formatter_class=argparse.RawDescriptionHelpFormatter
-)
-parser.add_argument(
-    '--config',
-    type=str,
-    metavar='PATH',
-    help='Path to sgconfig.yaml file for customizing ast-grep behavior (language mappings, rule directories, etc.)'
-)
-args = parser.parse_args()
+        ''',
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        '--config',
+        type=str,
+        metavar='PATH',
+        help='Path to sgconfig.yaml file for customizing ast-grep behavior (language mappings, rule directories, etc.)'
+    )
+    args = parser.parse_args()
 
-# Determine config path with precedence: --config flag > AST_GREP_CONFIG env > None
-CONFIG_PATH = None
-if args.config:
-    if not os.path.exists(args.config):
-        print(f"Error: Config file '{args.config}' does not exist")
-        sys.exit(1)
-    CONFIG_PATH = args.config
-elif os.environ.get('AST_GREP_CONFIG'):
-    env_config = os.environ.get('AST_GREP_CONFIG')
-    if not os.path.exists(env_config):
-        print(f"Error: Config file '{env_config}' specified in AST_GREP_CONFIG does not exist")
-        sys.exit(1)
-    CONFIG_PATH = env_config
+    # Determine config path with precedence: --config flag > AST_GREP_CONFIG env > None
+    if args.config:
+        if not os.path.exists(args.config):
+            print(f"Error: Config file '{args.config}' does not exist")
+            sys.exit(1)
+        CONFIG_PATH = args.config
+    elif os.environ.get('AST_GREP_CONFIG'):
+        env_config = os.environ.get('AST_GREP_CONFIG')
+        if env_config and not os.path.exists(env_config):
+            print(f"Error: Config file '{env_config}' specified in AST_GREP_CONFIG does not exist")
+            sys.exit(1)
+        CONFIG_PATH = env_config
 
 # Initialize FastMCP server
 mcp = FastMCP("ast-grep")
 
-class DumpFormat(Enum):
-    Pattern = "pattern"
-    CST = "cst"
-    AST = "ast"
+DumpFormat = Literal["pattern", "cst", "ast"]
 
 @mcp.tool()
 def dump_syntax_tree(
@@ -74,8 +75,8 @@ def dump_syntax_tree(
 
     Internally calls: ast-grep run --pattern <code> --lang <language> --debug-query=<format>
     """
-    result = run_ast_grep("run", ["--pattern", code, "--lang", language, f"--debug-query={format.value}"])
-    return result.stderr.strip()
+    result = run_ast_grep("run", ["--pattern", code, "--lang", language, f"--debug-query={format}"])
+    return result.stderr.strip()  # type: ignore[no-any-return]
 
 @mcp.tool()
 def test_match_code_rule(
@@ -92,7 +93,7 @@ def test_match_code_rule(
     matches = json.loads(result.stdout.strip())
     if not matches:
         raise ValueError("No matches found for the given code and rule. Try adding `stopBy: end` to your inside/has rule.")
-    return matches
+    return matches  # type: ignore[no-any-return]
 
 @mcp.tool()
 def find_code(
@@ -131,7 +132,7 @@ def find_code(
         # Limit results if max_results is specified
         if max_results is not None and len(matches) > max_results:
             matches = matches[:max_results]
-        return matches
+        return matches  # type: ignore[no-any-return]
     else:
         # Text format - return plain text output
         result = run_ast_grep("run", args + [project_folder])
@@ -150,7 +151,7 @@ def find_code(
             else:
                 header = f"Found {len(non_empty_lines)} matches:\n"
             output = header + output
-        return output
+        return output  # type: ignore[no-any-return]
 
 @mcp.tool()
 def find_code_by_rule(
@@ -188,7 +189,7 @@ def find_code_by_rule(
         # Limit results if max_results is specified
         if max_results is not None and len(matches) > max_results:
             matches = matches[:max_results]
-        return matches
+        return matches  # type: ignore[no-any-return]
     else:
         # Text format - return plain text output
         result = run_ast_grep("scan", args + [project_folder])
@@ -207,16 +208,21 @@ def find_code_by_rule(
             else:
                 header = f"Found {len(non_empty_lines)} matches:\n"
             output = header + output
-        return output
+        return output  # type: ignore[no-any-return]
 
 def run_command(args: List[str], input_text: Optional[str] = None) -> subprocess.CompletedProcess:
     try:
+        # On Windows, if ast-grep is installed via npm, it's a batch file
+        # that requires shell=True to execute properly
+        use_shell = (sys.platform == "win32" and args[0] == "ast-grep")
+
         result = subprocess.run(
             args,
             capture_output=True,
             input=input_text,
             text=True,
-            check=True  # Raises CalledProcessError if return code is non-zero
+            check=True,  # Raises CalledProcessError if return code is non-zero
+            shell=use_shell
         )
         return result
     except subprocess.CalledProcessError as e:
@@ -237,6 +243,7 @@ def run_mcp_server() -> None:
     Run the MCP server.
     This function is used to start the MCP server when this script is run directly.
     """
+    parse_args_and_get_config()
     mcp.run(transport="stdio")
 
 if __name__ == "__main__":

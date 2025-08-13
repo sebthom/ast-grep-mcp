@@ -1,0 +1,70 @@
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+name: Tests
+
+on:  # https://docs.github.com/en/actions/reference/events-that-trigger-workflows
+  push:
+    branches:
+    - '**'
+    tags-ignore:  # don't build tags
+    - '**'
+    paths-ignore:
+    - '**/*.md'
+  pull_request:
+    paths-ignore:
+    - '**/*.md'
+  workflow_dispatch:
+    # https://docs.github.com/en/actions/reference/events-that-trigger-workflows#workflow_dispatch
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+      fail-fast: false
+
+    steps:
+    - name: Git Checkout
+      uses: actions/checkout@v4  # https://github.com/actions/checkout
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+
+    - name: Set up Python
+      run: uv python install
+
+    - name: Install ast-grep
+      run: |
+        npm install -g @ast-grep/cli
+        ast-grep --version
+
+    - name: Install dependencies
+      run: |
+        uv sync --all-extras --dev
+
+    - name: Lint with ruff
+      run: |
+        uv run ruff check .
+
+    - name: Format check with ruff
+      run: |
+        uv run ruff format --check .
+      continue-on-error: true  # TODO
+
+    - name: Type check with mypy
+      run: |
+        uv run mypy main.py
+
+    - name: Run unit tests
+      run: |
+        uv run pytest tests/test_main.py -v --cov=main --cov-report=term-missing
+
+    - name: Run integration tests
+      run: |
+        uv run pytest tests/test_integration.py -v
