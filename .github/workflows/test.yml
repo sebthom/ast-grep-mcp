@@ -63,7 +63,7 @@ jobs:
 
     - name: Run unit tests
       run: |
-        uv run pytest tests/test_main.py -v --cov=main --cov-report=term-missing
+        uv run pytest tests/test_unit.py -v --cov=main --cov-report=term-missing
 
     - name: Run integration tests
       run: |

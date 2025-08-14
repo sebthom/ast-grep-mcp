@@ -1,5 +1,6 @@
 """Integration tests for ast-grep MCP server"""
 
+import json
 import os
 import sys
 from unittest.mock import Mock, patch
@@ -79,9 +80,14 @@ class TestIntegration:
     @patch("main.run_ast_grep")
     def test_find_code_by_rule(self, mock_run, fixtures_dir):
         """Test find_code_by_rule with mocked ast-grep"""
-        # Mock the response
+        # Mock the response with JSON format (since we always use JSON internally)
         mock_result = Mock()
-        mock_result.stdout = "fixtures/example.py:7:class Calculator:"
+        mock_matches = [{
+            "text": "class Calculator:\n    pass",
+            "file": "fixtures/example.py",
+            "range": {"start": {"line": 6}, "end": {"line": 7}}
+        }]
+        mock_result.stdout = json.dumps(mock_matches)
         mock_run.return_value = mock_result
 
         yaml_rule = """id: test
@@ -95,10 +101,11 @@ rule:
 
         assert "Calculator" in result
         assert "Found 1 match" in result
+        assert "fixtures/example.py:7-8" in result
 
         # Verify the command was called correctly
         mock_run.assert_called_once_with(
-            "scan", ["--inline-rules", yaml_rule, fixtures_dir]
+            "scan", ["--inline-rules", yaml_rule, "--json", fixtures_dir]
         )
 
     def test_find_code_with_max_results(self, fixtures_dir):
@@ -111,7 +118,8 @@ rule:
             output_format="text",
         )
 
-        assert "limited to 1" in result
+        # The new format says "showing first X of Y" instead of "limited to X"
+        assert "showing first 1 of" in result or "Found 1 match" in result
         # Should only have one match in the output
         assert result.count("def ") == 1
 
