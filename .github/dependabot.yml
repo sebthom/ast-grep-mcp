@@ -1,0 +1,34 @@
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+version: 2
+enable-beta-ecosystems: true
+updates:
+- package-ecosystem: github-actions
+  directory: /
+  open-pull-requests-limit: 5
+  schedule:
+    interval: daily
+    time: "03:00"
+  commit-message:
+    prefix: ci
+    prefix-development: ci
+    include: scope
+  labels:
+  - dependencies
+  - pinned
+
+- package-ecosystem: uv
+  directory: /
+  open-pull-requests-limit: 5
+  schedule:
+    interval: daily
+    time: "03:00"
+  commit-message:
+    prefix: fix
+    prefix-development: build
+    include: scope
+  allow:
+  - dependency-type: direct
+  - dependency-type: indirect
+  labels:
+  - dependencies
+  - pinned
