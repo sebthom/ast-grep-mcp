@@ -6,5 +6,8 @@ dist/
 wheels/
 *.egg-info
 
+# MyPy. Ruff, PyTest cache folders
+.*_cache/
+
 # Virtual environments
 .venv
